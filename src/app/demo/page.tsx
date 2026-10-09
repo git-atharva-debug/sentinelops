@@ -3,13 +3,10 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  Play,
   CheckCircle,
-  XCircle,
-  Loader2,
   ArrowRight,
 } from 'lucide-react';
-import { showToast } from '@/components/ui/toast';
+
 
 type StepStatus = 'pending' | 'running' | 'success' | 'error';
 
@@ -25,140 +22,57 @@ interface DemoStep {
 export default function DemoPage() {
   const [steps, setSteps] = useState<DemoStep[]>([
     {
-      id: 'procedure',
-      title: 'Trigger Procedure Failure',
-      description: 'Simulate an error in the procedure route. The hardened boundary catches and reports it to Sentry.',
+      id: 'step1-trigger',
+      title: '1. Trigger Failure',
+      description: 'Simulate an error in the procedure route.',
       status: 'pending',
       link: '/procedures/payment-processing',
     },
     {
-      id: 'procedure-verify',
-      title: 'Verify Procedure Event',
-      description: 'Confirm Sentry received the event with tags: error_boundary=procedure, route_type=procedure.',
+      id: 'step2-boundary',
+      title: '2. Error Boundary',
+      description: 'The Next.js error boundary catches the unhandled exception.',
       status: 'pending',
     },
     {
-      id: 'embed',
-      title: 'Trigger Embed Failure',
-      description: 'Simulate an error in the embed route. The hardened boundary catches and reports it to Sentry.',
-      status: 'pending',
-      link: '/embed',
-    },
-    {
-      id: 'embed-verify',
-      title: 'Verify Embed Event',
-      description: 'Confirm Sentry received the event with tags: error_boundary=embed, route_type=embed.',
+      id: 'step3-capture',
+      title: '3. captureException()',
+      description: 'The centralized utility calls Sentry.captureException().',
       status: 'pending',
     },
     {
-      id: 'health',
-      title: 'Health Check',
-      description: 'Verify all system services are operational.',
+      id: 'step4-context',
+      title: '4. Context & Correlation',
+      description: 'Tags, Environment, Release, and Correlation ID are attached.',
       status: 'pending',
     },
     {
-      id: 'incident',
-      title: 'Review Incidents',
-      description: 'View all recorded incidents with Sentry event IDs.',
+      id: 'step5-open',
+      title: '5. Open Incident',
+      description: 'View the created incident in the application dashboard.',
       status: 'pending',
       link: '/incidents',
     },
+    {
+      id: 'step6-stacktrace',
+      title: '6. Sentry Stack Trace',
+      description: 'Open the event in Sentry and verify source-mapped stack traces.',
+      status: 'pending',
+    },
+    {
+      id: 'step7-embed',
+      title: '7. Embed Widget',
+      description: 'Simulate an error in the Embed Widget boundary for parity.',
+      status: 'pending',
+      link: '/embed',
+    },
   ]);
 
-  const updateStep = useCallback((id: string, status: StepStatus, result?: string) => {
+  const toggleStep = useCallback((id: string) => {
     setSteps((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status, result: result || s.result } : s))
+      prev.map((s) => (s.id === id ? { ...s, status: s.status === 'success' ? 'pending' : 'success' } : s))
     );
   }, []);
-
-  const runProcedureTest = async () => {
-    updateStep('procedure', 'running');
-    try {
-      const res = await fetch('/api/simulate/procedure-error', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: 'payment-processing',
-          errorMessage: 'Simulated procedure execution failure in payment-processing',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        updateStep('procedure', 'success', `Incident ${data.data.incident.id.substring(0, 8)}… created`);
-        updateStep('procedure-verify', 'success',
-          'Tags verified: error_boundary=procedure, route_type=procedure'
-        );
-        showToast('Procedure error simulated successfully', 'success');
-      } else {
-        updateStep('procedure', 'error', 'Failed to simulate');
-      }
-    } catch {
-      updateStep('procedure', 'error', 'Network error');
-    }
-  };
-
-  const runEmbedTest = async () => {
-    updateStep('embed', 'running');
-    try {
-      const res = await fetch('/api/simulate/embed-error', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          errorMessage: 'Simulated embed application failure',
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        updateStep('embed', 'success', `Incident ${data.data.incident.id.substring(0, 8)}… created`);
-        updateStep('embed-verify', 'success',
-          'Tags verified: error_boundary=embed, route_type=embed'
-        );
-        showToast('Embed error simulated successfully', 'success');
-      } else {
-        updateStep('embed', 'error', 'Failed to simulate');
-      }
-    } catch {
-      updateStep('embed', 'error', 'Network error');
-    }
-  };
-
-  const runHealthCheck = async () => {
-    updateStep('health', 'running');
-    try {
-      const res = await fetch('/api/health');
-      const data = await res.json();
-      if (data.success) {
-        const status = data.data.status;
-        updateStep(
-          'health',
-          status === 'error' ? 'error' : 'success',
-          `System: ${status} · ${data.data.services
-            .map((s: { name: string; status: string }) => `${s.name}: ${s.status}`)
-            .join(', ')}`
-        );
-        showToast(`Health check: ${status}`, status === 'error' ? 'error' : 'success');
-      }
-    } catch {
-      updateStep('health', 'error', 'Health check failed');
-    }
-  };
-
-  const runViewIncidents = async () => {
-    updateStep('incident', 'running');
-    try {
-      const res = await fetch('/api/incidents?limit=5');
-      const data = await res.json();
-      if (data.success) {
-        updateStep(
-          'incident',
-          'success',
-          `${data.data.total} incidents recorded`
-        );
-      }
-    } catch {
-      updateStep('incident', 'error', 'Failed to fetch incidents');
-    }
-  };
 
   const completedCount = steps.filter((s) => s.status === 'success').length;
   const isComplete = completedCount === steps.length;
@@ -200,8 +114,6 @@ export default function DemoPage() {
       {/* Steps */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {steps.map((step, index) => {
-          const isActionable = ['procedure', 'embed', 'health', 'incident'].includes(step.id);
-
           return (
             <div
               key={step.id}
@@ -212,24 +124,18 @@ export default function DemoPage() {
                 border: `1px solid ${
                   step.status === 'success'
                     ? 'rgba(34, 197, 94, 0.15)'
-                    : step.status === 'running'
-                    ? 'rgba(59, 130, 246, 0.2)'
                     : 'var(--border-default)'
                 }`,
               }}
             >
               <div className="flex items-start gap-4">
                 {/* Step number / status */}
-                <div className="shrink-0" style={{ marginTop: '2px' }}>
+                <div className="shrink-0 cursor-pointer" style={{ marginTop: '2px' }} onClick={() => toggleStep(step.id)}>
                   {step.status === 'success' ? (
                     <CheckCircle size={18} style={{ color: 'var(--green)' }} />
-                  ) : step.status === 'error' ? (
-                    <XCircle size={18} style={{ color: 'var(--red)' }} />
-                  ) : step.status === 'running' ? (
-                    <Loader2 size={18} className="animate-spin" style={{ color: 'var(--blue)' }} />
                   ) : (
                     <span
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium hover:bg-opacity-80 transition-colors"
                       style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
                     >
                       {index + 1}
@@ -248,52 +154,25 @@ export default function DemoPage() {
                     {step.title}
                   </h3>
 
-                  {step.status !== 'success' && (
-                    <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
-                      {step.description}
-                    </p>
-                  )}
+                  <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
+                    {step.description}
+                  </p>
 
-                  {step.result && (
-                    <p
-                      className="text-xs font-mono"
-                      style={{
-                        color: step.status === 'success' ? 'var(--green)' : 'var(--red)',
-                        marginBottom: '8px',
-                      }}
-                    >
-                      {step.result}
-                    </p>
-                  )}
-
-                  {step.status !== 'success' && (
-                    <div className="flex items-center gap-2">
-                      {isActionable && (
-                        <button
-                          onClick={() => {
-                            if (step.id === 'procedure') runProcedureTest();
-                            if (step.id === 'embed') runEmbedTest();
-                            if (step.id === 'health') runHealthCheck();
-                            if (step.id === 'incident') runViewIncidents();
-                          }}
-                          disabled={step.status === 'running'}
-                          className="btn btn-primary btn-sm"
-                        >
-                          {step.status === 'running' ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Play size={12} />
-                          )}
-                          Run
-                        </button>
-                      )}
-                      {step.link && (
-                        <Link href={step.link} className="btn btn-secondary btn-sm">
-                          Navigate <ArrowRight size={12} />
-                        </Link>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {step.status !== 'success' && (
+                      <button
+                        onClick={() => toggleStep(step.id)}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Mark Complete
+                      </button>
+                    )}
+                    {step.link && (
+                      <Link href={step.link} target="_blank" className="btn btn-secondary btn-sm">
+                        Navigate <ArrowRight size={12} />
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

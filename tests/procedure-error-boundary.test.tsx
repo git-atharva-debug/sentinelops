@@ -12,29 +12,17 @@ import { render } from '@testing-library/react';
 import { screen } from '@testing-library/dom';
 import React from 'react';
 
-// Mock Sentry
-const { mockCaptureException, mockWithScope, mockSetTag, mockSetContext, mockSetLevel } = vi.hoisted(() => {
-  const setTag = vi.fn();
-  const setContext = vi.fn();
-  const setLevel = vi.fn();
+// Mock centralized error reporting
+const { mockReportApplicationError, mockGenerateCorrelationId } = vi.hoisted(() => {
   return {
-    mockCaptureException: vi.fn().mockReturnValue('mock-event-id-123'),
-    mockWithScope: vi.fn((callback: (scope: unknown) => void) => {
-      callback({
-        setTag,
-        setContext,
-        setLevel,
-      });
-    }),
-    mockSetTag: setTag,
-    mockSetContext: setContext,
-    mockSetLevel: setLevel,
+    mockReportApplicationError: vi.fn().mockReturnValue('mock-event-id-123'),
+    mockGenerateCorrelationId: vi.fn().mockReturnValue('INC-2026-MOCK-123'),
   };
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: mockCaptureException,
-  withScope: mockWithScope,
+vi.mock('@/lib/error-reporting', () => ({
+  reportApplicationError: mockReportApplicationError,
+  generateCorrelationId: mockGenerateCorrelationId,
 }));
 
 // Mock fetch for incident creation
@@ -67,45 +55,17 @@ describe('Procedure Error Boundary', () => {
     expect(screen.getByText('Procedure Boundary')).toBeInTheDocument();
   });
 
-  it('calls Sentry.captureException with the error object', () => {
+  it('calls centralized reportApplicationError with correct context and error object', () => {
     render(<ProcedureError error={testError} reset={() => {}} />);
 
-    expect(mockWithScope).toHaveBeenCalled();
-    expect(mockCaptureException).toHaveBeenCalledWith(testError);
-  });
-
-  it('sets error_boundary tag to "procedure"', () => {
-    render(<ProcedureError error={testError} reset={() => {}} />);
-
-    expect(mockSetTag).toHaveBeenCalledWith('error_boundary', 'procedure');
-  });
-
-  it('sets route_type tag to "procedure"', () => {
-    render(<ProcedureError error={testError} reset={() => {}} />);
-
-    expect(mockSetTag).toHaveBeenCalledWith('route_type', 'procedure');
-  });
-
-  it('sets module tag to "procedure-processing"', () => {
-    render(<ProcedureError error={testError} reset={() => {}} />);
-
-    expect(mockSetTag).toHaveBeenCalledWith('module', 'procedure-processing');
-  });
-
-  it('sets error level to "error"', () => {
-    render(<ProcedureError error={testError} reset={() => {}} />);
-
-    expect(mockSetLevel).toHaveBeenCalledWith('error');
-  });
-
-  it('sets application context', () => {
-    render(<ProcedureError error={testError} reset={() => {}} />);
-
-    expect(mockSetContext).toHaveBeenCalledWith(
-      'application',
+    expect(mockReportApplicationError).toHaveBeenCalledWith(
+      testError,
       expect.objectContaining({
-        name: 'SentinelOps',
+        boundary: 'procedure',
+        route: 'procedure',
         module: 'procedure-processing',
+        correlationId: 'INC-2026-MOCK-123',
+        severity: 'error'
       })
     );
   });
@@ -130,11 +90,11 @@ describe('Procedure Error Boundary', () => {
       <ProcedureError error={testError} reset={() => {}} />
     );
 
-    // Re-render should not cause another captureException call
+    // Re-render should not cause another report call
     rerender(<ProcedureError error={testError} reset={() => {}} />);
 
-    // captureException should have been called exactly once
-    expect(mockCaptureException).toHaveBeenCalledTimes(1);
+    // reportApplicationError should have been called exactly once
+    expect(mockReportApplicationError).toHaveBeenCalledTimes(1);
   });
 
   it('shows Sentry status indicator', () => {

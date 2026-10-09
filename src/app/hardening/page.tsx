@@ -112,12 +112,17 @@ export default function HardeningPage() {
             overflow: 'auto',
             border: '1px solid var(--border-default)',
           }}
-        >{`Sentry.withScope((scope) => {
-  scope.setTag('error_boundary', 'procedure');
-  scope.setTag('route_type', 'procedure');
-  scope.setTag('module', 'procedure-processing');
-  scope.setLevel('error');
-  Sentry.captureException(error);
+        >{`// Centralized reporting utility automatically handles
+// Sentry scopes, environments, release context, and IDs.
+import { reportApplicationError, generateCorrelationId } from '@/lib/error-reporting';
+
+const correlationId = generateCorrelationId();
+const eventId = reportApplicationError(error, {
+  boundary: 'procedure',
+  route: 'procedure',
+  module: 'procedure-processing',
+  correlationId,
+  severity: 'error'
 });`}</pre>
       </section>
 

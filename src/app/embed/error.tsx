@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { XCircle, RefreshCw, ArrowLeft, Radio, Shield } from 'lucide-react';
 import Link from 'next/link';
 import * as Sentry from '@sentry/nextjs';
+import { reportApplicationError, generateCorrelationId } from '@/lib/error-reporting';
 
 // ===========================================
 // EMBED ERROR BOUNDARY (HARDENED)
@@ -28,49 +29,21 @@ export default function EmbedError({
   // Ref to prevent duplicate Sentry reporting
   const reportedRef = useRef(false);
   const sentryEventIdRef = useRef<string | undefined>(undefined);
+  const correlationIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (reportedRef.current) return;
-    reportedRef.current = true;
+    const correlationId = generateCorrelationId();
+    correlationIdRef.current = correlationId;
 
-    // ==========================================
-    // SENTRY ERROR REPORTING (HARDENED)
-    // ==========================================
-    // This is the KEY fix for the original problem:
-    // Previously, this error boundary did NOT call
-    // Sentry.captureException(), so errors were
-    // invisible to the monitoring system.
-    // ==========================================
-
-    Sentry.withScope((scope) => {
-      // Set tags for Sentry dashboard filtering
-      scope.setTag('error_boundary', 'embed');
-      scope.setTag('route_type', 'embed');
-      scope.setTag('module', 'embed-application');
-      scope.setTag('environment', process.env.NEXT_PUBLIC_APP_ENV || 'demo');
-      scope.setTag('app', 'sentinelops');
-
-      // Set structured context (NO sensitive data)
-      scope.setContext('error_boundary', {
-        boundary: 'embed',
-        routeType: 'embed',
-        module: 'embed-application',
-        timestamp: new Date().toISOString(),
-        appVersion: '1.0.0',
-      });
-
-      scope.setContext('application', {
-        name: 'SentinelOps',
-        module: 'embed-application',
-        environment: process.env.NEXT_PUBLIC_APP_ENV || 'demo',
-      });
-
-      scope.setLevel('error');
-
-      // Capture the ACTUAL Error object
-      const eventId = Sentry.captureException(error);
-      sentryEventIdRef.current = eventId;
+    const eventId = reportApplicationError(error, {
+      boundary: 'embed',
+      route: 'embed',
+      module: 'embed-application',
+      correlationId,
+      severity: 'error'
     });
+    sentryEventIdRef.current = eventId;
 
     // Create an incident record in the application database
     fetch('/api/simulate/embed-error', {
@@ -79,6 +52,7 @@ export default function EmbedError({
       body: JSON.stringify({
         errorMessage: error.message,
         sentryEventId: sentryEventIdRef.current,
+        correlationId: correlationIdRef.current,
       }),
     }).catch(() => {
       // Silently fail
@@ -88,34 +62,38 @@ export default function EmbedError({
   return (
     <div className="error-fallback">
       <div className="error-fallback-icon">
-        <XCircle size={36} style={{ color: 'var(--accent-red)' }} />
+        <XCircle size={36} style={{ color: 'var(--red)' }} />
       </div>
 
-      <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+      <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
         Embedded Application Crashed
       </h2>
 
-      <p className="text-sm mb-6 max-w-md" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-sm" style={{ color: 'var(--text-muted)', marginBottom: '24px', maxWidth: '28rem' }}>
         The embedded application widget encountered a critical error.
         This error has been automatically reported to the monitoring system.
       </p>
 
       {/* Error Details Card */}
       <div
-        className="w-full max-w-lg rounded-xl p-4 mb-6"
         style={{
-          background: 'var(--bg-card)',
+          width: '100%',
+          maxWidth: '32rem',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '24px',
+          background: 'var(--bg-surface)',
           border: '1px solid rgba(239, 68, 68, 0.3)',
         }}
       >
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>
               Error Message
             </span>
             <span className="badge badge-error">Embed Boundary</span>
           </div>
-          <p className="text-sm font-mono" style={{ color: 'var(--accent-red)' }}>
+          <p className="text-sm font-mono" style={{ color: 'var(--red)' }}>
             {error.message}
           </p>
 
@@ -129,11 +107,10 @@ export default function EmbedError({
 
           {/* Sentry Status */}
           <div
-            className="flex items-center gap-2 pt-2"
-            style={{ borderTop: '1px solid var(--border-default)' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-default)' }}
           >
-            <Radio size={14} style={{ color: 'var(--accent-green)' }} />
-            <span className="text-xs" style={{ color: 'var(--accent-green)' }}>
+            <Radio size={14} style={{ color: 'var(--green)' }} />
+            <span className="text-xs" style={{ color: 'var(--green)' }}>
               Reported to Sentry
             </span>
             {sentryEventIdRef.current && (
@@ -144,7 +121,7 @@ export default function EmbedError({
           </div>
 
           {/* Tags */}
-          <div className="flex flex-wrap gap-1">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             <span className="badge badge-purple">error_boundary: embed</span>
             <span className="badge badge-info">route_type: embed</span>
           </div>
@@ -153,17 +130,16 @@ export default function EmbedError({
 
       {/* Hardening Badge */}
       <div
-        className="flex items-center gap-2 mb-6 px-4 py-2 rounded-lg"
-        style={{ background: 'var(--accent-green-dim)' }}
+        style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', padding: '8px 16px', borderRadius: '8px', background: 'var(--green-dim)' }}
       >
-        <Shield size={16} style={{ color: 'var(--accent-green)' }} />
-        <span className="text-xs font-semibold" style={{ color: 'var(--accent-green)' }}>
+        <Shield size={16} style={{ color: 'var(--green)' }} />
+        <span className="text-xs font-semibold" style={{ color: 'var(--green)' }}>
           HARDENED — Error boundary reports to Sentry via captureException()
         </span>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <button onClick={reset} className="btn btn-primary">
           <RefreshCw size={16} />
           Reload Widget

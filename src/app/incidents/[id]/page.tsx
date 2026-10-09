@@ -150,6 +150,12 @@ export default function IncidentDetailPage() {
             <p className="text-sm font-mono" style={{ marginTop: '4px', color: 'var(--purple)' }}>{incident.errorBoundary || '—'}</p>
           </div>
           <div>
+            <span className="label">Correlation ID</span>
+            <p className="text-sm font-mono" style={{ marginTop: '4px', color: 'var(--cyan)' }}>
+              {metadata.correlationId || '—'}
+            </p>
+          </div>
+          <div>
             <span className="label">Created</span>
             <p className="text-sm" style={{ marginTop: '4px', color: 'var(--text-primary)' }}>
               {new Date(incident.createdAt).toLocaleString()}
@@ -169,11 +175,25 @@ export default function IncidentDetailPage() {
               <CheckCircle size={14} style={{ color: 'var(--green)' }} />
               <span className="text-sm" style={{ color: 'var(--green)' }}>Exception captured</span>
             </div>
-            <div>
-              <span className="label">Event ID</span>
-              <p className="text-sm font-mono" style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
-                {incident.sentryEventId}
-              </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '16px' }}>
+              <div>
+                <span className="label">Event ID</span>
+                <p className="text-sm font-mono" style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
+                  {incident.sentryEventId}
+                </p>
+              </div>
+              <div>
+                <span className="label">Environment</span>
+                <p className="text-sm" style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
+                  {process.env.NEXT_PUBLIC_APP_ENV || 'demo'}
+                </p>
+              </div>
+              <div>
+                <span className="label">Release</span>
+                <p className="text-sm" style={{ marginTop: '4px', color: 'var(--text-secondary)' }}>
+                  {process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
+                </p>
+              </div>
             </div>
             {process.env.NEXT_PUBLIC_SENTRY_ORG && process.env.NEXT_PUBLIC_SENTRY_PROJECT && (
               <a
@@ -181,7 +201,6 @@ export default function IncidentDetailPage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-sm"
-                style={{ marginTop: '12px' }}
               >
                 <ExternalLink size={13} />
                 Open in Sentry
@@ -189,11 +208,16 @@ export default function IncidentDetailPage() {
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <Clock size={14} style={{ color: 'var(--yellow)' }} />
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              Event not yet linked — recorded locally
-            </span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Clock size={14} style={{ color: 'var(--yellow)' }} />
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Sentry event not available
+              </span>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              This incident was recorded locally and does not have an associated Sentry event.
+            </p>
           </div>
         )}
       </section>

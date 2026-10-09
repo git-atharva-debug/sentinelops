@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const errorMessage = body.errorMessage || 'Simulated embed application failure';
     const sentryEventId = body.sentryEventId || undefined;
+    const correlationId = body.correlationId || undefined;
 
     const incident = await IncidentService.create({
       title: 'Embed Application Failure',
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
         boundaryType: 'embed',
         isSimulated: true,
         widgetVersion: '2.4.1',
+        correlationId,
       },
     });
 

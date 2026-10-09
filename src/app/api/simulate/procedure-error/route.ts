@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const slug = body.slug || 'unknown-procedure';
     const errorMessage = body.errorMessage || `Simulated procedure execution failure in ${slug}`;
     const sentryEventId = body.sentryEventId || undefined;
+    const correlationId = body.correlationId || undefined;
 
     const incident = await IncidentService.create({
       title: `Procedure Failure: ${slug}`,
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
         procedureSlug: slug,
         boundaryType: 'procedure',
         isSimulated: true,
+        correlationId,
       },
     });
 

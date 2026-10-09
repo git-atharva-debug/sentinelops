@@ -12,29 +12,17 @@ import { render } from '@testing-library/react';
 import { screen } from '@testing-library/dom';
 import React from 'react';
 
-// Mock Sentry
-const { mockCaptureException, mockWithScope, mockSetTag, mockSetContext, mockSetLevel } = vi.hoisted(() => {
-  const setTag = vi.fn();
-  const setContext = vi.fn();
-  const setLevel = vi.fn();
+// Mock centralized error reporting
+const { mockReportApplicationError, mockGenerateCorrelationId } = vi.hoisted(() => {
   return {
-    mockCaptureException: vi.fn().mockReturnValue('mock-event-id-456'),
-    mockWithScope: vi.fn((callback: (scope: unknown) => void) => {
-      callback({
-        setTag: setTag,
-        setContext: setContext,
-        setLevel: setLevel,
-      });
-    }),
-    mockSetTag: setTag,
-    mockSetContext: setContext,
-    mockSetLevel: setLevel,
+    mockReportApplicationError: vi.fn().mockReturnValue('mock-event-id-456'),
+    mockGenerateCorrelationId: vi.fn().mockReturnValue('INC-2026-MOCK-456'),
   };
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: mockCaptureException,
-  withScope: mockWithScope,
+vi.mock('@/lib/error-reporting', () => ({
+  reportApplicationError: mockReportApplicationError,
+  generateCorrelationId: mockGenerateCorrelationId,
 }));
 
 // Mock fetch
@@ -66,45 +54,17 @@ describe('Embed Error Boundary', () => {
     expect(screen.getByText('Embed Boundary')).toBeInTheDocument();
   });
 
-  it('calls Sentry.captureException with the error object', () => {
+  it('calls centralized reportApplicationError with correct context and error object', () => {
     render(<EmbedError error={testError} reset={() => {}} />);
 
-    expect(mockWithScope).toHaveBeenCalled();
-    expect(mockCaptureException).toHaveBeenCalledWith(testError);
-  });
-
-  it('sets error_boundary tag to "embed"', () => {
-    render(<EmbedError error={testError} reset={() => {}} />);
-
-    expect(mockSetTag).toHaveBeenCalledWith('error_boundary', 'embed');
-  });
-
-  it('sets route_type tag to "embed"', () => {
-    render(<EmbedError error={testError} reset={() => {}} />);
-
-    expect(mockSetTag).toHaveBeenCalledWith('route_type', 'embed');
-  });
-
-  it('sets module tag to "embed-application"', () => {
-    render(<EmbedError error={testError} reset={() => {}} />);
-
-    expect(mockSetTag).toHaveBeenCalledWith('module', 'embed-application');
-  });
-
-  it('sets error level to "error"', () => {
-    render(<EmbedError error={testError} reset={() => {}} />);
-
-    expect(mockSetLevel).toHaveBeenCalledWith('error');
-  });
-
-  it('sets application context', () => {
-    render(<EmbedError error={testError} reset={() => {}} />);
-
-    expect(mockSetContext).toHaveBeenCalledWith(
-      'application',
+    expect(mockReportApplicationError).toHaveBeenCalledWith(
+      testError,
       expect.objectContaining({
-        name: 'SentinelOps',
+        boundary: 'embed',
+        route: 'embed',
         module: 'embed-application',
+        correlationId: 'INC-2026-MOCK-456',
+        severity: 'error'
       })
     );
   });
@@ -129,7 +89,7 @@ describe('Embed Error Boundary', () => {
 
     rerender(<EmbedError error={testError} reset={() => {}} />);
 
-    expect(mockCaptureException).toHaveBeenCalledTimes(1);
+    expect(mockReportApplicationError).toHaveBeenCalledTimes(1);
   });
 
   it('shows Sentry status indicator', () => {
